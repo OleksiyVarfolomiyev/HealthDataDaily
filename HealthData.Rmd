@@ -1,0 +1,234 @@
+---
+title: "Health Data"
+author: "Alex (Oleksiy) Varfolomiyev"
+date: "February 29, 2016"
+output: html_document
+---
+
+```{r, echo=FALSE, warning=F, message=F}
+
+  source('multiplot.R', local = T)
+
+  if(!file.exists("data")) dir.create("data")
+  if(!file.exists("figure")) dir.create("figure")
+  if(!exists("dat")) {
+    fileName <- "./data/HealthData_Daily.csv"
+    dat <- read.csv(fileName, header = T, stringsAsFactors = FALSE, sep = ',')
+  }
+```
+
+# Steps 
+
+```{r, echo=FALSE, warning = F, message=F, results='asis'}
+  
+  ## Cleaning 
+  names(dat) <- gsub("Steps..count.", "Steps", names(dat))
+  names(dat) <- gsub("Distance..mi.", "Distance", names(dat))
+  names(dat) <- gsub("Flights.Climbed..count.", "FlightsClimbed", names(dat))
+
+  dat$Start <- gsub(" 00:00", "", dat$Start)
+  dat$Date <- as.Date(dat$Start, format = '%d-%b-%Y')
+  dat <- dat[ , !(names(dat) %in% c("Start", "Finish"))]
+  dat[, "Steps"] <- as.integer(dat[, "Steps"])
+  dat$Weekday <- weekdays(dat$Date)
+  
+  # Plot
+  require(ggplot2)
+  
+  n = 3
+  hues = seq(15, 375, length = n + 1)
+  ggplotCol <- hcl(h = hues, l = 65, c = 100)[1:n]
+  
+  n <- 30
+  dat$MA <- round(filter(dat$Steps,rep(1/n,n), sides=2))
+ 
+  # Plot
+  plotDailyNofSteps <- #ggplot(dat, aes(Steps)) + 
+    ggplot( data = dat, aes(Date) ) +
+    geom_line(aes(y = Steps, colour = ggplotCol[1])) +
+    geom_line(aes(y = MA, colour = ggplotCol[2])) +
+        scale_colour_discrete(name="",labels=c("Weekly Moving Average", "Daily Steps")) +
+        ylab("Steps")+
+#        ggtitle("Daily # of steps")+
+        theme_bw()
+  
+        plotDailyNofSteps
+        
+      # Histogram
+      histDailyNofSteps <- ggplot(dat, aes(Steps)) + 
+        geom_histogram(aes(fill=..count..), colour = "black", binwidth = 2000) + 
+                       #breaks = seq(min(dat$Steps), max(dat$Steps)) 
+        guides(fill=FALSE)+
+        geom_vline(xintercept = mean(dat$Steps), colour = ggplotCol[1]) +
+#        ggtitle("Daily # of steps histogram")+
+        theme_bw()
+
+        print(histDailyNofSteps)
+#      dev.copy(png, file = "./figure/plotDailyTotNofSteps.png", height = 640, width = 480)
+
+      # Violin Plot
+      violinDailyNofSteps <- ggplot(dat, aes(x = "Count", y = Steps)) + 
+        geom_violin(alpha = 0.5, aes(fill=..count..)) +
+        guides(fill=FALSE) +
+        theme_bw()
+
+        violinDailyNofSteps
+
+  # Calculate and report the mean and median of the total number of steps taken per day
+  DailyTotNofStepsMean <- round(mean(dat$Steps))
+  DailyTotNofStepsMedian <- round(median(dat$Steps))
+  DailyTotNofStepsMax <- round(max(dat$Steps),0)
+  
+  if(!exists("StepsSummaryStats")) 
+    StepsSummaryStats <- data.frame(
+      Statistics = c("mean","median","max"),
+      Steps = c(DailyTotNofStepsMean, DailyTotNofStepsMedian, DailyTotNofStepsMax)
+    )
+  
+  knitr::kable(StepsSummaryStats)
+
+  # Create a new factor variable in the dataset with two levels – “weekday” and “weekend” 
+  # indicating whether a given date is a weekday or weekend day.
+   weekdayWeekend <- function(date) {
+     if (weekdays(date) %in% c("Saturday", "Sunday")) 
+       day <- "weekend"
+     else 
+       day <- "weekday"
+     
+     day
+   }
+   
+   # add column indicating weekday/weekend
+   dat$Weekdays <- as.factor(sapply(dat$Date, weekdayWeekend))
+   
+   WeekdaysAveNofSteps <- aggregate(Steps ~ Weekdays, data = dat, mean)
+   WeekdaysAveNofSteps$Steps <- round(WeekdaysAveNofSteps$Steps)
+
+   if(!exists("WeekdaySummaryStats")) 
+      WeekdaySummaryStats <- data.frame(
+        Day = c("Weekday", "Weekend"),
+        Steps = c(WeekdaysAveNofSteps$Steps)
+    )
+  
+  knitr::kable(WeekdaySummaryStats)
+
+```
+ 
+  <!--Daily Total number of Steps Mean = `r DailyTotNofStepsMean`
+  Daily Total number of Steps Median = `r DailyTotNofStepsMedian`
+  Daily Total number of Steps Max = `r DailyTotNofStepsMax`-->
+
+# Walking + Running Distance
+
+```{r, echo=FALSE, warning=F, message=F}
+  
+      plotDailyDistance <- ggplot(dat, aes(Distance)) + 
+        geom_histogram(aes(fill=..count..), colour = "black", binwidth = 1)+
+        scale_fill_gradient("Count", low = "deeppink4", high = "deeppink1") +
+        geom_vline(xintercept = mean(dat$Distance), colour = ggplotCol[1]) +
+        guides(fill=FALSE)+
+        theme_bw()
+
+      plotDailyDistance
+#      dev.copy(png, file = "./figure/plotDailyDistance.png", height = 640, width = 480)
+
+  # Calculate and report the stats of the distance walked
+  kmInMi <- 1.609344
+  DailyDistanceMeanKm <- round(kmInMi*mean(dat$Distance), 3)
+  DailyDistanceMedianKm <- round(kmInMi*median(dat$Distance), 3)
+  DailyDistanceMaxKm <- round(kmInMi*max(dat$Distance), 3)
+  
+  DailyDistanceMean <- round(mean(dat$Distance),3)
+  DailyDistanceMedian <- round(median(dat$Distance),3)
+  DailyDistanceMax <- round(max(dat$Distance),3)
+  
+    if(!exists("DistSummaryStats")) 
+      DistSummaryStats <- data.frame(
+        Statistics = c("mean","median","max"),
+        Miles = c(DailyDistanceMean, DailyDistanceMedian, DailyDistanceMax),
+        Kilometers = c(DailyDistanceMeanKm, DailyDistanceMedianKm, DailyDistanceMaxKm)
+    )
+  
+  knitr::kable(DistSummaryStats)
+
+```
+  
+  <!--Daily Distance Mean = `r DailyDistanceMean`
+  
+  Daily Distance Median = `r DailyDistanceMedian`
+
+  Daily Distance Max = `r DailyDistanceMax`-->
+  
+# Flights Climbed
+
+```{r, echo=FALSE, warning=F, message=F}
+  
+      plotDailyFlights <- ggplot(dat, aes(FlightsClimbed)) + 
+        geom_histogram(aes(fill=..count..), colour = "black", binwidth = 4 ) +
+         scale_fill_gradient("Count", low = "mediumorchid4", high = "mediumorchid")+
+        geom_vline(xintercept = mean(dat$FlightsClimbed), colour = ggplotCol[1]) +
+        guides(fill=FALSE)+
+        theme_bw()
+
+      plotDailyFlights
+#      dev.copy(png, file = "./figure/plotDailyFlights.png", height = 640, width = 480)
+
+  # Calculate and report the stats of the Flights Climbed
+  DailyFlightsMean <- round(mean(dat$FlightsClimbed))
+  DailyFlightsMedian <- round(median(dat$FlightsClimbed))
+  DailyFlightsMax <- round(max(dat$FlightsClimbed))
+  
+    if(!exists("FlightsSummaryStats")) 
+      FlightsSummaryStats <- data.frame(
+        Statistics = c("mean","median","max"),
+        Flights = c(DailyFlightsMean, DailyFlightsMedian, DailyFlightsMax)
+    )
+  
+  knitr::kable(FlightsSummaryStats)
+
+```
+  
+# Weekly steps pattern
+```{r, echo=FALSE, warning = F, message=F, results='asis'}
+
+  WeekdayAveNofSteps <- aggregate(Steps ~ Weekday, data = dat, FUN = mean)
+  WeekdayAveNofSteps$Steps <- round(WeekdayAveNofSteps$Steps)
+
+  plotWeekdayAveNofSteps <- ggplot( WeekdayAveNofSteps, aes(x= Weekday, y =Steps))+
+    geom_bar(stat = "identity", aes(fill = factor(Weekday)))+
+    scale_x_discrete(limits=c("Monday","Tuesday", "Wednesday","Thursday","Friday", "Saturday", "Sunday"))+
+    guides(fill=FALSE)+
+    theme_bw()
+
+  plotWeekdayAveNofSteps
+  #dev.copy(png, file = "./figure/plot2.png", height = 640, width = 480)
+```
+
+# How Big is your step? How far can you walk?
+
+```{r, echo=FALSE, warning = F, message=F, results='asis'}
+
+nDays <- nrow(dat)
+nSteps <- sum(dat$Steps)
+totDistance <- sum(dat$Distance)
+totDistanceKm <- totDistance*kmInMi
+
+stepSize <- totDistance/nSteps
+feetPerMi <- 5280
+stepSizeFt <- stepSize*feetPerMi
+cmPerMi <- 160934
+stepSizeCm <- cmPerMi*stepSize
+
+   if(!exists("SummaryStats")) 
+      SummaryStats <- data.frame(
+        Days <- nDays,
+        Steps <- nSteps,
+        StepSizeFt = stepSizeFt,
+        StepSizeCm = stepSizeCm,
+        MilesWalked = totDistance,
+        KmWalked = totDistanceKm
+    )
+  
+  knitr::kable(SummaryStats)
+```
+
